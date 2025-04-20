@@ -37,7 +37,14 @@ def set_run_text(run_element: CT_R | Run, text: str) -> CT_R:
     run_element.text = text
     return run_element
 
-def add_run_after_run(added_run: CT_R | Run | str, after_this_run: CT_R | Run, added_run_rPr: CT_RPr | Font | None = None) -> CT_R:
+def _add_run_after_run(added_run: CT_R, after_this_run: CT_R, added_run_rPr: CT_RPr | None = None) -> CT_R:
+    after_this_run.addnext(added_run.__deepcopy__(""))
+    if added_run_rPr is not None:
+        added_run.replace(added_run.get_or_add_rPr(), added_run_rPr)
+    
+    return added_run
+
+def add_run_after_run(added_run: CT_R | Run | str | Iterable[CT_R | Run | str], after_this_run: CT_R | Run, added_run_rPr: CT_RPr | Font | None = None) -> CT_R:
     """
     add the run "added_run" after the run "after_this_run".
     
@@ -46,27 +53,57 @@ def add_run_after_run(added_run: CT_R | Run | str, after_this_run: CT_R | Run, a
     has the same font as "after_this_run" and text from the string "added_run".
 
     Args:
-        added_run (CT_R | Run | str): added run or added text/string. if it is str and added_run_rPr type is not CT_RPr, font is inherited from after_this_run.
+        added_run (CT_R | Run | str | Iterable[CT_R | Run | str]): added run or added text/string. if it is str and added_run_rPr type is not CT_RPr, font is inherited from after_this_run.
+                                                                   If it is Iterable[...], 
         after_this_run (CT_R | Run): the added_run will be added next to this run
         added_run_rPr (CT_RPr | Font | None): the wanted font for added_run. if None, font will be inherited from added_run, or from after_this_run only if added_run is str.
     
     Returns:
         added_run (CT_R): added run
     """
+    # after_this_run type check
+    if isinstance(after_this_run, Run):
+        after_this_run = after_this_run._element
+    elif not isinstance(after_this_run, CT_R):
+        TypeError(f"expected type of after_this_run to be CT_R | Run, instead given type {type(after_this_run)}.")
+    
+    # added_run_rPr type check
+    if added_run_rPr is None:
+        pass
+    elif isinstance(added_run_rPr, Font):
+        added_run_rPr = added_run_rPr._element.rPr
+    elif not isinstance(added_run_rPr, CT_RPr):
+        TypeError(f"expected type of added_run_rPr to be CT_RPr | Font | None, instead given type {type(added_run_rPr)}.")
+    
+    # added_run type check (if it is other type than iterable)
     if isinstance(added_run, str):
         added_run = set_run_text(after_this_run.__deepcopy__(""), added_run)
     elif isinstance(added_run, Run):
         added_run = added_run._element
-        
-    if isinstance(after_this_run, Run):
-        after_this_run = after_this_run._element
+    # added_run type check (if it is iterable)
+    elif isinstance(added_run, Iterable):
+        added_runs = added_run
+        prev_run = after_this_run
+        returned_runs = []
+        for added_run in added_runs:
+            if isinstance(added_run, str):
+                added_run = set_run_text(after_this_run.__deepcopy__(""), added_run)
+            elif isinstance(added_run, Run):
+                added_run = added_run._element
+            elif not isinstance(added_run, CT_R):
+                raise TypeError(f"expected type of added_run to be CT_R | Run | str | Iterable[CT_R | Run | str], instead one of the element in the iterable has given type {type(added_run)}.")
+            prev_run = _add_run_after_run(added_run, prev_run, added_run_rPr)
+            returned_runs.append(prev_run)
+        return returned_runs 
+    elif not isinstance(added_run, CT_R):
+        raise TypeError(f"expected type of added_run to be CT_R | Run | str | Iterable[CT_R | Run | str], instead given type {type(added_run)}.")
     
-    if isinstance(added_run_rPr, CT_RPr):
-        added_run.replace(added_run.get_or_add_rPr(), added_run_rPr)
-    elif isinstance(added_run_rPr, Font):
-        added_run.replace(added_run.get_or_add_rPr(), added_run_rPr._element.rPr)
     
+    
+    # actually add run after run (and set rPr)
     after_this_run.addnext(added_run.__deepcopy__(""))
+    if added_run_rPr is not None:
+        added_run.replace(added_run.get_or_add_rPr(), added_run_rPr)
     
     return added_run
 
@@ -221,6 +258,19 @@ def set_font_name(object: CT_Fonts | CT_R | Font | Run, new_font_name: str | dic
             raise ValueError("language must be c, e, a, or o.\n(stands for chinese, english, arabic or others respectively)")
 
 def find_reference_in_repl(repl: str) -> list[tuple[Span, str, re.Match[str]]]:
+    """
+    Find referenced groups in repl.
+    return the following info for each of the found referenced groups:
+        span (tuple[int, int]): the span of the found referenced groups in repl string
+        nameORnumber (str): the name or the number of the found referenced groups in repl string. e.g. match.span(nameORnumber) == span
+        match (re.Match): the match object of the found referenced groups. 
+
+    Args:
+        repl (str): the repl string that you put in the 2nd argument of re.sub(pattern, repl, string)
+
+    Returns:
+        list[tuple[tuple[int, int], str, re.Match[str]]]: info for each of the found referenced groups
+    """    
     pattern = re.compile(r"(?P<whole>\\(?P<nameORnumber>(?:\d+)|(?:g<\w+>)))")
     matches = list(pattern.finditer(repl))
     return [(m.span(), m.groupdict()['nameORnumber'], m) for m in matches]
@@ -345,7 +395,7 @@ def find_and_replace(paragraph_or_body: CT_P, finds: Iterable[str] | str, replac
     Args:
         paragraph_or_body (CT_P | Paragraph | Document): the paragraph/document to undergo find and replace.
         finds (Iterable[str] | str):      find the strings from this list in the paragraph/document ...
-        replaces (Iterable[str] | str):   and replace with the corresponding strings in this list.
+        replaces (Iterable[str] | str):   and replace with the corresponding strings in this list. finds and replaces should both have same length.
     """
     if isinstance(paragraph_or_body, Document_Type):
         document = paragraph_or_body
@@ -355,7 +405,7 @@ def find_and_replace(paragraph_or_body: CT_P, finds: Iterable[str] | str, replac
         paragraph = paragraph_or_body
         find_and_replace(paragraph._element, finds, replaces)
     elif isinstance(paragraph_or_body, CT_P):
-        paragraph = paragraph_or_body\
+        paragraph = paragraph_or_body
         
         if isinstance(finds, str):
             finds = [finds]
@@ -373,9 +423,8 @@ def find_and_replace(paragraph_or_body: CT_P, finds: Iterable[str] | str, replac
             # in the order of occurance in the repl, and shall write down None if no referenced group is in the section,
             # and repl_sections_starts shall drop down the start of each sections. Start of each section should also be the end of previous section.
             for repl_captured_group in repl_captured_groups:
-                repl_group_span = repl_captured_group[0]
-                repl_group_start = repl_group_span[0]
-                repl_group_end = repl_group_span[1]
+                repl_group_start = repl_captured_group[0][0]
+                repl_group_end = repl_captured_group[0][1]
                 repl_group_name = repl_captured_group[1]
                 repl_group_match = repl_captured_group[2]
                 
@@ -389,6 +438,10 @@ def find_and_replace(paragraph_or_body: CT_P, finds: Iterable[str] | str, replac
                 repl_sections_names.append(None)
                 repl_sections_matches.append(None)
                 repl_sections_starts.append(repl_group_end)
+            if repl_sections_starts[-1] == len(replace_text):
+                repl_sections_names.pop()
+                repl_sections_matches.pop()
+                repl_sections_starts.pop()
             repl_sections_ends = repl_sections_starts[1:] + [len(replace_text)]
             
             # Isolate all find_text and groups in paragraph
@@ -398,7 +451,6 @@ def find_and_replace(paragraph_or_body: CT_P, finds: Iterable[str] | str, replac
                 groupindex = matches[0].re.groupindex
             
             for i_spans in range(len(spans))[::-1]:
-                match = matches[i_spans]
                 groups = groupss[i_spans]
                 run_span_start, run_span_end = spans[i_spans]
                 
@@ -406,32 +458,34 @@ def find_and_replace(paragraph_or_body: CT_P, finds: Iterable[str] | str, replac
                 # if no such run, give None
                 fr = run_span_start
                 first_normal_run_rPr = None
-                for group in groups:
+                for group in groups[1:]:
                     if group[0] == fr:
                         fr = group[1]
                     else:
                         first_normal_run_rPr = paragraph.r_lst[fr].rPr
                         break
                 
-                groups_rPr = [first_normal_run_rPr] + \
-                             [paragraph.r_lst[run_group_start].rPr for run_group_start, _ in groups[1:]]
+                # groups_rPr = [first_normal_run_rPr] + \
+                #              [paragraph.r_lst[run_group_start].rPr for run_group_start, _ in groups[1:]]
+                groups_runs = [paragraph.r_lst[run_group_start: run_group_end] for run_group_start, run_group_end in groups[1:]]
                 
                 # Remove unneeded runs
                 run_to_remove = paragraph.r_lst[run_span_start: run_span_end]
                 
                 prev_run = paragraph.r_lst[run_span_start]
                 for i, section_name in enumerate(repl_sections_names):
-                    repl_section_string = replace_text[repl_sections_starts[i]: repl_sections_ends[i]]
-                    repl_section_string = match.expand(repl_section_string)
                     
                     if section_name is None:
-                        add_run_after_run(repl_section_string, prev_run, first_normal_run_rPr)
+                        repl_section_string = replace_text[repl_sections_starts[i]: repl_sections_ends[i]]
+                        prev_run = add_run_after_run(repl_section_string, prev_run, first_normal_run_rPr)
                     elif section_name.isnumeric():    
-                        add_run_after_run(repl_section_string, prev_run, groups_rPr[int(section_name)])
+                        prev_runs = add_run_after_run(groups_runs[int(section_name) - 1], prev_run)
+                        prev_run = prev_runs[-1]
                     else:
                         i_groups = groupindex[section_name]
-                        group_rPr = groups_rPr[i_groups]
-                        add_run_after_run(repl_section_string, prev_run, group_rPr)  # TODO change rPr to corresponding groups rPr
+                        group_runs = groups_runs[i_groups]
+                        prev_runs = add_run_after_run(group_runs, prev_run)
+                        prev_run = prev_runs[-1]
                 
                 for run in run_to_remove:
                     remove_run(run)
