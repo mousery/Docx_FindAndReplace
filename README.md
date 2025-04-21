@@ -6,9 +6,26 @@ Paragraphs in Microsoft document are actually split into sections of text-contai
 
 It is also regular expression compatible, and can use re syntax e.g. (?P<name>something).
 
-## Example
+## Example 1
 
-    insert images here later
+### test1.docx -> output1.docx
+<img src="https://github.com/mousery/Docx_FindAndReplace/raw/main/example/example-test1.docx.png" height="300">  <img src="https://github.com/mousery/Docx_FindAndReplace/raw/main/example/example-output1.docx.png" height="300">
+
+    from docx import Document as DOCX
+    d1 = DOCX("./example/test1.docx")
+    find_and_replace(d1.paragraphs[0], "([a-zA-Z]+)([0-9]+)(?P<r>[a-zA-Z]+)", r"\g<r>\2\1\3")
+    find_and_replace(d1.paragraphs[1], "(!+)([\[\]]+)(?P<v>v{4})(v+)", r"abcd\g<v>\1\g<v>\2\g<v>")
+    d1.save("./example/output1.docx")
+
+## Example 2
+
+### test2.docx -> output2.docx
+<img src="https://github.com/mousery/Docx_FindAndReplace/raw/main/example/example-test2.docx.png" height="300">  <img src="https://github.com/mousery/Docx_FindAndReplace/raw/main/example/example-output2.docx.png" height="300">
+
+    from docx import Document as DOCX
+    d2 = DOCX("./example/test2.docx")
+    find_and_replace(d2, "(\w+) (\w+)", r"First: \1, Last: \2")
+    d2.save("./example/output2.docx")
 
 ## Others
 1. get_font_name and set_font_name (including chinese, arabics and others font name)
