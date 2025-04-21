@@ -254,6 +254,7 @@ def set_font_name(object: CT_Fonts | CT_R | Font | Run, new_font_name: str | dic
         else:
             raise ValueError("language must be c, e, a, or o.\n(stands for chinese, english, arabic or others respectively)")
 
+find_reference_pattern = re.compile(r"(?:\A|(?<=[^\\]))(?:\\\\)*(?P<whole>\\(?P<g>g<)?(?P<nameORnumber>(?(g)\w+|\d+))(?(g)>|(?:$|(?<=[^>]))))")
 def find_reference_in_repl(repl: str) -> list[tuple[Span, str, re.Match[str]]]:
     """
     Find referenced groups in repl.
@@ -268,9 +269,8 @@ def find_reference_in_repl(repl: str) -> list[tuple[Span, str, re.Match[str]]]:
     Returns:
         list[tuple[tuple[int, int], str, re.Match[str]]]: info for each of the found referenced groups
     """    
-    pattern = re.compile(r"(?P<whole>\\(?P<nameORnumber>(?:\d+)|(?:g<\w+>)))")
-    matches = list(pattern.finditer(repl))
-    return [(m.span(), m.groupdict()['nameORnumber'], m) for m in matches]
+    matches = list(find_reference_pattern.finditer(repl))
+    return [(m.span('whole'), m.groupdict()['nameORnumber'], m) for m in matches]
 
 def isolate_para_runs_by_span(paragraph: Paragraph | CT_P, 
                            span: Iterable[int]) -> tuple[int, int]:
@@ -469,24 +469,29 @@ def find_and_replace(paragraph_or_body: CT_P, finds: Iterable[str] | str, replac
                 # Remove unneeded runs
                 run_to_remove = paragraph.r_lst[run_span_start: run_span_end]
                 
-                prev_run = paragraph.r_lst[run_span_start]
-                for i, section_name in enumerate(repl_sections_names):
+                prev_run = paragraph.r_lst[run_span_end-1]
+                print(f"original text: {paragraph.text}")
+                for i in range(len(repl_sections_names)-1, -1, -1):
+                    section_name = repl_sections_names[i]
                     
                     if section_name is None:
                         repl_section_string = replace_text[repl_sections_starts[i]: repl_sections_ends[i]]
-                        prev_run = add_run_after_run(repl_section_string, prev_run, first_normal_run_rPr)
+                        add_run_after_run(repl_section_string, prev_run, first_normal_run_rPr)
                     elif section_name.isnumeric():    
                         prev_runs = add_run_after_run(groups_runs[int(section_name) - 1], prev_run)
-                        prev_run = prev_runs[-1]
+                        print(f"added {"".join([r.text for r in prev_runs])} -> {paragraph.text}")
                     else:
-                        i_groups = groupindex[section_name]
+                        i_groups = groupindex[section_name] - 1
                         group_runs = groups_runs[i_groups]
                         prev_runs = add_run_after_run(group_runs, prev_run)
-                        prev_run = prev_runs[-1]
+                        print(f"added {"".join([r.text for r in prev_runs])} -> {paragraph.text}")
                 
                 for run in run_to_remove:
                     remove_run(run)
+                
+                print(f"final text: {paragraph.text}")
                     
 
 if __name__ == "__main__":
     pass
+    
