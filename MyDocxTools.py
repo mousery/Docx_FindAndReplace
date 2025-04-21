@@ -37,13 +37,6 @@ def set_run_text(run_element: CT_R | Run, text: str) -> CT_R:
     run_element.text = text
     return run_element
 
-def _add_run_after_run(added_run: CT_R, after_this_run: CT_R, added_run_rPr: CT_RPr | None = None) -> CT_R:
-    after_this_run.addnext(added_run.__deepcopy__(""))
-    if added_run_rPr is not None:
-        added_run.replace(added_run.get_or_add_rPr(), added_run_rPr)
-    
-    return added_run
-
 def add_run_after_run(added_run: CT_R | Run | str | Iterable[CT_R | Run | str], after_this_run: CT_R | Run, added_run_rPr: CT_RPr | Font | None = None) -> CT_R:
     """
     add the run "added_run" after the run "after_this_run".
@@ -83,18 +76,22 @@ def add_run_after_run(added_run: CT_R | Run | str | Iterable[CT_R | Run | str], 
     # added_run type check (if it is iterable)
     elif isinstance(added_run, Iterable):
         added_runs = added_run
-        prev_run = after_this_run
         returned_runs = []
-        for added_run in added_runs:
+        for added_run in added_runs[::-1]:
             if isinstance(added_run, str):
                 added_run = set_run_text(after_this_run.__deepcopy__(""), added_run)
             elif isinstance(added_run, Run):
-                added_run = added_run._element
-            elif not isinstance(added_run, CT_R):
+                added_run = added_run._element.__deepcopy__("")
+            elif isinstance(added_run, CT_R):
+                added_run = added_run.__deepcopy__("")
+            else:
                 raise TypeError(f"expected type of added_run to be CT_R | Run | str | Iterable[CT_R | Run | str], instead one of the element in the iterable has given type {type(added_run)}.")
-            prev_run = _add_run_after_run(added_run, prev_run, added_run_rPr)
-            returned_runs.append(prev_run)
-        return returned_runs 
+            # actually add run after run (and set rPr)
+            after_this_run.addnext(added_run)
+            if added_run_rPr is not None:
+                added_run.replace(added_run.get_or_add_rPr(), added_run_rPr)
+            returned_runs.append(added_run)
+        return returned_runs[::-1]
     elif not isinstance(added_run, CT_R):
         raise TypeError(f"expected type of added_run to be CT_R | Run | str | Iterable[CT_R | Run | str], instead given type {type(added_run)}.")
     
