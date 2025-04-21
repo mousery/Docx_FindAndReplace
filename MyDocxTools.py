@@ -493,5 +493,13 @@ def find_and_replace(paragraph_or_body: CT_P, finds: Iterable[str] | str, replac
                     
 
 if __name__ == "__main__":
-    pass
+    from docx import Document as DOCX
+    d1 = DOCX("./example/test1.docx")
+    find_and_replace(d1.paragraphs[0], "([a-zA-Z]+)([0-9]+)(?P<r>[a-zA-Z]+)", r"\g<r>\2\1\3")
+    find_and_replace(d1.paragraphs[1], "(!+)([\[\]]+)(?P<v>v{4})(v+)", r"abcd\g<v>\1\g<v>\2\g<v>")
+    d1.save("./example/output1.docx")
+    
+    d2 = DOCX("./example/test2.docx")
+    find_and_replace(d2, "(\w+) (\w+)", r"First: \1, Last: \2")
+    d2.save("./example/output2.docx")
     
