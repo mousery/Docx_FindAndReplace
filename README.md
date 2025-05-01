@@ -38,3 +38,4 @@ It is also regular expression compatible, and can use re syntax e.g. (?P<name>so
 5. split_run_at_string_index
 6. delete_paragraph
 7. isolate_para_runs_by_span
+
